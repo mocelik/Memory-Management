@@ -136,7 +136,10 @@ void *bestCase(size_t requested){
 			if (closest == 0) break; //no need to try to find anything smaller
 	    }//end if
 	}//end for
-    if (bestNode==NULL) perror("Could not allocate that much data!");
+    if (bestNode==NULL) {
+		perror("Could not allocate that much data!");
+		return NULL;
+	}
 	return newEntry(bestNode, requested)->ptr;
 }
 
@@ -149,7 +152,10 @@ void *worstCase(size_t requested){
 			bestNode = cursor;
 	  }//end if
 	}//end for
-    if (bestNode==NULL) perror("Could not allocate that much data!");
+    if (bestNode==NULL) {
+		perror("Could not allocate that much data!");
+		return NULL;
+	}
 	return newEntry(bestNode, requested)->ptr;
 }
 
@@ -174,8 +180,9 @@ void *nextCase(size_t requested){
 }
 
 /* Frees a block of memory previously allocated by mymalloc. */
-void myfree(void* block)
-{
+void myfree(void* block){
+	if (block==NULL) return;
+	if (block<myMemory || block>(myMemory+mySize)) return;
 	//first, we must find the memorylist entry that points to that block
 	struct memoryList *entry = findEntry(block); 
     // for readability
@@ -334,7 +341,7 @@ int mem_small_free(int size)
 	// than size
 	int count = 0;
 	for (struct memoryList *cursor = head; cursor!=NULL; cursor=cursor->next){
-		if ( cursor->size < size && (!cursor->alloc) ){ 
+		if ( cursor->size <= size && (!cursor->alloc) ){ 
 			count++;
 		}
 	}
@@ -345,12 +352,17 @@ int mem_small_free(int size)
  * Returns 1 if allocated, 0 otherwise
  */
 char mem_is_alloc(void *ptr) {
+	if (ptr==NULL) return NULL;
+	if (ptr<myMemory || ptr>(myMemory+mySize)) return NULL;
     return findEntry(ptr)->alloc;
 }
 
 // returns a pointer to the memoryList entry
 // that points to the block containing the ptr
 struct memoryList *findEntry(void *ptr) {
+	if (ptr==NULL) return NULL;
+	if (ptr<myMemory || ptr>(myMemory+mySize)) return NULL;
+	
 	for (struct memoryList *cursor = head; cursor != NULL; cursor= cursor->next){
 		if ( (ptr >= cursor->ptr) && 
 		    (ptr < ((cursor->ptr) + (cursor->size)) )) {
@@ -363,7 +375,7 @@ struct memoryList *findEntry(void *ptr) {
 
 // This removes a node from the doubley linked memoryList
 char removeEntry(struct memoryList *entry){
-
+	if (entry==NULL) return -1;
     // if node is in between two nodes
 	if (entry->next != NULL && entry->prev != NULL) { 
 		(entry->next)->prev = entry->prev; 
@@ -396,6 +408,7 @@ char removeEntry(struct memoryList *entry){
 // it will automatically create a second pointer that points to the
 // remaining memory at the end of the block (if any)
 struct memoryList *newEntry(struct memoryList *entry, size_t sz) {
+	if (entry == NULL) return NULL;
   // if the requested size is the size of 'entry', give entire entry
   if (entry->size == sz) {
     entry->alloc = 1;
@@ -473,7 +486,13 @@ strategies strategyFromString(char * strategy){
 		return 0;
 }
 
-/*************** For outputting useful information **************/
+
+/* 
+ * These functions are for you to modify however you see fit.  These will not
+ * be used in tests, but you may find them useful for debugging.
+ */
+
+/* Use this function to print out the current contents of memory. */
 void printList() {
 	printf("\nThe memory list contains the following data:\n");
     printf("%4s\t%5s\t%8s\t%12s\t%12s\n","Node","Alloc","Size","From","To");
