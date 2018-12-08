@@ -1,6 +1,7 @@
-// March 15th, 2017
+// March 15th, 2017 - due date
+// updated December 7th, 2018 - came back to finish what I started
 // Muhammed Orhan Celik - 100980038
-// Sysc 4001 Assignment 4 - v2.1
+// Sysc 4001 Assignment 4 - v2.2
 // NOTE: THIS CODE DOES NOT PASS THE PROFESSORS TEST METHODS!!!
 // THE PRINT_MEMORY FUNCTION ON LINE 520 IS COMMENTED OUT
 // YOU MAY USE THAT TO CHECK IF IT PASSES TESTS.
@@ -12,7 +13,6 @@
 #include <assert.h>
 #include "mymem.h"
 #include <time.h>
-
 
 /**
  * Custom Function Declarations
@@ -28,7 +28,7 @@ void *nextCase(size_t);
 struct memoryList
 {
   // doubly-linked list
-  struct memoryList *last;
+  struct memoryList *prev;
   struct memoryList *next;
 
   int size;            // How many bytes in this block?
@@ -39,13 +39,8 @@ struct memoryList
 
 strategies myStrategy = NotSet;    // Current strategy
 
-
 size_t mySize;
 void *myMemory = NULL;
-char debug = 0, debug2 = 0, debug3 = 0;
-/* copy paste the line below beside debug printf statements
- if (debug) 
- */ 
 static struct memoryList *head;
 static struct memoryList *next;
 
@@ -64,8 +59,7 @@ static struct memoryList *next;
    sz specifies the number of bytes that will be available, in total, for all mymalloc requests.
 */
 
-void initmem(strategies strategy, size_t sz)
-{
+void initmem(strategies strategy, size_t sz) {
 	myStrategy = strategy;
 
 	/* all implementations will need an actual block of memory to use */
@@ -73,8 +67,7 @@ void initmem(strategies strategy, size_t sz)
 
 	if (myMemory != NULL) free(myMemory); /* in case this is not the first time initmem2 is called */
 
-	/* TODO: release any other memory you were using for bookkeeping when doing a re-initialization! */
-	
+	/* Release any other memory being used for bookkeeping when doing a re-initialization! */
 	if (head != NULL) {
        struct memoryList* temp;
 	   while (head != NULL) //this will free the memoryList
@@ -84,17 +77,16 @@ void initmem(strategies strategy, size_t sz)
 		   free(temp);
 		}
 	}
-	//head = NULL;
-	//next = NULL;
+
 
 	myMemory = malloc(sz);
 
-	/* TODO: Initialize memory management structure. */
+	/* Initialize memory management structure. */
 	head = malloc(sizeof(struct memoryList));
 	head->size = sz;
 	head->alloc = 0;
 	head->ptr = myMemory;
-	head->last = NULL;
+	head->prev = NULL;
 	head->next = NULL;
 	next = myMemory;
   return;
@@ -106,32 +98,31 @@ void initmem(strategies strategy, size_t sz)
  *  Restriction: requested >= 1 
  */
 
-void *mymalloc(size_t requested)
-{
+void *mymalloc(size_t requested) {
 	assert((int)myStrategy > 0 && requested>=1);
 	
-	switch (myStrategy)
-	  {
-	  case NotSet: 
-	            return NULL;
-	  case First:
-				return firstCase(requested);
-	  case Best:
-				return bestCase(requested);
-	  case Worst:
-	            return worstCase(requested);
-	  case Next:
-	            return nextCase(requested);
-	  }
+	switch (myStrategy) {
+        case NotSet: 
+                return NULL;
+        case First:
+                return firstCase(requested);
+        case Best:
+                return bestCase(requested);
+        case Worst:
+                return worstCase(requested);
+        case Next:
+                return nextCase(requested);
+    }
 	return NULL;
 }
+
 void *firstCase(size_t requested) {
 	for (struct memoryList *cursor = head; cursor!= NULL; cursor = cursor->next) {
 			  if (cursor->size >= requested && cursor->alloc == 0) {
 				  return newEntry(cursor, requested)->ptr;
 			  }//end if
 	}//end for
-	if (debug) printf("myMalloc couldn't fit it anywhere probably...\n");
+	perror("Could not allocate that much data!");
 	return NULL;
 }
 
@@ -143,10 +134,12 @@ void *bestCase(size_t requested){
 			closest = cursor->size - requested; // not sure why, but using closest = cursor->size doesn't work as well....
 			bestNode = cursor;
 			if (closest == 0) break; //no need to try to find anything smaller
-	  }//end if
+	    }//end if
 	}//end for
+    if (bestNode==NULL) perror("Could not allocate that much data!");
 	return newEntry(bestNode, requested)->ptr;
 }
+
 void *worstCase(size_t requested){
 	int furthest = 0;
 	struct memoryList *bestNode = NULL;
@@ -156,8 +149,10 @@ void *worstCase(size_t requested){
 			bestNode = cursor;
 	  }//end if
 	}//end for
+    if (bestNode==NULL) perror("Could not allocate that much data!");
 	return newEntry(bestNode, requested)->ptr;
 }
+
 void *nextCase(size_t requested){
 	//try finding a spot starting at 'next'
 	
@@ -166,14 +161,15 @@ void *nextCase(size_t requested){
 				  return newEntry(cursor, requested)->ptr;
 			  }//end if
 	}//end for
-	if (debug3) printf("We got into the nextCase function.\n");
-	//if none, try again starting at 'head'
-	for (struct memoryList *cursor = head; cursor!= NULL; cursor = cursor->next) {
+
+	//if none, wrap around and try again starting from 'head'
+	for (struct memoryList *cursor = head; cursor!= next; cursor = cursor->next) {
 			  if (cursor->size >= requested && cursor->alloc == 0) {
 				  return newEntry(cursor, requested)->ptr;
 			  }//end if
 	}//end for
-	if (debug3) printf("myMalloc couldn't fit it anywhere probably...\n");
+
+	perror("Could not allocate that much data!");
 	return NULL;
 }
 
@@ -181,113 +177,105 @@ void *nextCase(size_t requested){
 void myfree(void* block)
 {
 	//first, we must find the memorylist entry that points to that block
-
 	struct memoryList *entry = findEntry(block); 
-	//does findEntry finally work?
+    // for readability
+    struct memoryList *tempPrevious= entry->prev; 
+    struct memoryList *tempNext = entry->next;
 
-    //entry should now point to the block starting with ptr
-
-	// there are 4 cases:
-	// case 1: the block before is free			after is free
-	// case 2: the block before is free, 		after is allocated
-	// case 3: the block before is allocated, 	after is free
-	// case 4: the block before is allocated, 	after is allocated
+	// there are 4 common cases:
+	// case 1.1: the block before is free			after is free
+	// case 1.2: the block before is free, 		    after is allocated
+	// case 1.3: the block before is allocated, 	after is free
+	// case 1.4: the block before is allocated, 	after is allocated
 	
-	//there are 4 more rare cases:
+	// there are 5 rare cases:
 	// case 2.1: block is at beginning of pool, and after is free
 	// case 2.2: block is at beginning of pool, and after is allocated
 	// case 2.3: block is at end of pool,       and previous is free
 	// case 2.4: block is at end of pool,       and previous is allocated
+    // case 2.5: block spans entire pool, from beginning to end
 	
-	// There is one last case where it takes up all of memory
-	// what if it encapsulates the whole memory?
-	if (debug)printf("\tmyFree Function: ");
+    // if block isn't at beginning or end of pool
 	if ( (block != myMemory) && (block + entry->size != (myMemory+mySize)) ) {
-		// ensure that the block isn't at the beginning or the end
-		// of the memory pool. if they are... we'll handle it later...
-		if (!mem_is_alloc(block - 1) && !mem_is_alloc(block+entry->size)) {
+        // we know that there are nodes right before and right after entry
+
+        
+        // case 1.1: previous is free && next is free
+		if ( (!tempPrevious->alloc) && (!tempNext->alloc) ) {
 			// case 1: the block before is free			after is free
 			// if case 1: merge the PREVIOUS with current and NEXT
-			if (debug)printf("The block is between two free blocks.\n");
-			//find PREVIOUS and NEXT entry
-			struct memoryList *tempPrevious = findEntry(block -1);
-			struct memoryList *tempNext = findEntry(block + entry->size);
 			tempPrevious->size = tempPrevious->size + entry->size + tempNext->size;
 			removeEntry(tempNext);
 			removeEntry(entry);
-			
-		} else if (!mem_is_alloc(block - 1) && mem_is_alloc(block+entry->size)) {
-			// case 2: the block before is free, 		after is allocated
-			// if case 2: merge the PREVIOUS with current
-			if (debug)printf("The block is after a free block, and before an allocated one.\n");
-			// find the entry pointing to PREVIOUS
-			struct memoryList *temp = findEntry(block -1);
-			
-			// keep PREVIOUS entry, remove current entry
-			// but first, update the previous size
-			temp->size = temp->size + entry->size;
-			// remember that temp->alloc is already 0
-			
-			//now, remove the CURRENT entry from the memoryList
+		
+        // case 1.2: previous is free && next is alloc
+		} else if ((!tempPrevious->alloc) && (tempNext->alloc)) {
+
+			// merge the PREVIOUS with current
+			//  -> keep PREVIOUS entry, remove current entry
+			//  -> but first, update the previous size
+            //  -> alloc is already 0
+			tempPrevious->size = tempPrevious->size + entry->size;
 			removeEntry(entry);
-			//done
+		
+        // case 1.3:  previous is alloc && next is free
+		} else if ((tempPrevious->alloc) && (!tempNext->alloc)) {
 			
-		} else if (mem_is_alloc(block - 1) && !mem_is_alloc(block+entry->size)) {
-			// case 3: the block before is allocated, 	after is free
-			// if case 3: merge the current with NEXT
-			if (debug)printf("The block is after an allocated block, but before a free one.\n");
-			// find the entry pointing to the NEXT block
-			struct memoryList *temp = findEntry(block + entry->size); //don't need +1
-			
-			// now need to update size of the entry
-			entry->size = entry->size + temp->size;
-			// and update alloc
+            // merge the current with NEXT
+			//  -> update size of current
+            //  -> update alloc
+            //  -> remove next entry
+			entry->size = entry->size + tempNext->size;
 			entry->alloc = 0;
+			removeEntry(tempNext);
+
+		
+        // case 1.4: previous is alloc && next is alloc
+		} else if ((tempPrevious->alloc) && (tempNext->alloc)) {
 			
-			removeEntry(temp);
-			// now we're done		
-			
-		} else if (mem_is_alloc(block - 1) && mem_is_alloc(block+entry->size)) {
-				// case 4: the block before is allocated, 	after is allocated
-			// if case 4: just change the alloc to 0
-			if (debug)printf("The block is between two allocated blocks.\n");
+            // don't need to do anything with other nodes
+            // just set alloc to 0
 			entry->alloc = 0;
 			
 		} else {
-			if (debug)printf ("I don't really know what's going on\n");
+			perror("Trying to remove a block in an unknown location (2).");
 		}
-	} else if (block == myMemory && (entry->size == mySize)){ //block takes up all of memory
+        
+    // case 2.5: block takes up all of memory
+	} else if (block == myMemory && (entry->size == mySize)){ 
 		entry->alloc = 0;	
-		if (debug)printf("The block takes up all of the memory (from beginning to end).\n");
-	} else if (block == myMemory && (entry->size != mySize)) {//block is at beginning
-		// two possibilities: the next block is either free or allocated
-    if (debug)printf("The block is at the beginning and ");
-		if (mem_is_alloc(block + entry->size)) {
-		  if (debug)printf("the next block is allocated.\n");
+
+    // case 2.1 or 2.2: block is at beginning of pool
+	} else if (block == myMemory && (entry->size != mySize)) {
+
+        // case 2.2: next block is allocated
+		if (tempNext->alloc) {
 			entry->alloc = 0;
+        
+        // case 2.1: next block is free
 		} else {
-		  if (debug)printf("the next block is free.\n");
-			struct memoryList *temp = findEntry(block + entry->size); //don't need +1
-			entry->size = entry->size + temp->size;
+			entry->size = entry->size + tempNext->size;
 			entry->alloc = 0;
-			removeEntry(temp);			
+			removeEntry(tempNext);			
 		}
-	} else if (block != myMemory && (block + entry->size == myMemory+mySize)) {//block is at end
+    
+    // case 2.3 or 2.4: block is at end of pool
+	} else if (block != myMemory && (block + entry->size == myMemory+mySize)) {
 		// two possibilities: the previous block is either free or allocated
-		if (debug)printf("The block is at the end and ");
-		if (mem_is_alloc(block-1)) {
-		  		if (debug)printf("the previous block is allocated.\n");
+
+        // case 2.4: previous block is allocated
+		if (tempPrevious->alloc) {
 			entry->alloc = 0;
+        
+        // case 2.3: previous block is free
 		} else {
-		  if (debug)printf("the previous block is free.\n");
-			struct memoryList *temp = findEntry(block -1);
-			temp->size = temp->size + entry->size;
-			removeEntry(entry);			
+			tempPrevious->size = tempPrevious->size + entry->size;
+			removeEntry(entry);		
 		}
 	} else {
-	  if (debug)printf("I got no clue where this block is.\n");
+	  perror("Trying to remove a block in an unknown location (1).");
 	}
-		
+
 	return;
 }
 
@@ -356,19 +344,10 @@ int mem_small_free(int size)
 /*
  * Returns 1 if allocated, 0 otherwise
  */
-char mem_is_alloc(void *ptr)
-{
-	for (struct memoryList *cursor = head; cursor != NULL; cursor=cursor->next) {
-		if ( (ptr >= cursor->ptr) && 
-				(ptr< (cursor->ptr + (cursor->size))) &&
-				(cursor->alloc == 1) ) {
-			return 1;
-		}
-	}
-    return 0;
+char mem_is_alloc(void *ptr) {
+    return findEntry(ptr)->alloc;
 }
 
- 
 // returns a pointer to the memoryList entry
 // that points to the block containing the ptr
 struct memoryList *findEntry(void *ptr) {
@@ -378,35 +357,38 @@ struct memoryList *findEntry(void *ptr) {
 			return cursor;
 		}
 	}
-	if (debug2) printf("There is no corresponding entry...\n");
+	perror("There is no corresponding entry...\n");
 	return NULL;	
 }
 
-// This removes an entry from the doubley linked memoryList
-// 
+// This removes a node from the doubley linked memoryList
 char removeEntry(struct memoryList *entry){
-	char flag = 1;
-	if (debug)printf("\t\tRemove Entry Function: ");
-	if (entry->next != NULL && entry->last != NULL) { //if its in the middle
-		(entry->next)->last = entry->last; 
-		(entry->last)->next = entry->next;
-		
-	} else if (entry->next==NULL && entry->last!=NULL){//if this is last entry
-		(entry->last)->next = NULL;	
-		if (debug)printf("this was the last node in the list.\n");
-		
-	} else if (entry->next!=NULL && entry->last==NULL) {//if this is first entry
-		head = entry->next;
-		
-	} else if (entry->next==NULL && entry->last==NULL) {//if this is the only entry
-		flag = 0;
-		entry->alloc = 0;
-		//equivalent to head->alloc = 0;
-	}
+
+    // if node is in between two nodes
+	if (entry->next != NULL && entry->prev != NULL) { 
+		(entry->next)->prev = entry->prev; 
+		(entry->prev)->next = entry->next;
+        free(entry);
 	
-	if (flag) { //DO NOT FREE HEAD!!!
+    // if node is last in list
+	} else if (entry->next==NULL && entry->prev!=NULL){
+		(entry->prev)->next = NULL;	
+        free(entry);
+
+    // if node is first in list
+	} else if (entry->next!=NULL && entry->prev==NULL) {
+		head = entry->next;
 		free(entry);
-	}
+
+    // if node is the only node in list
+	} else if (entry->next==NULL && entry->prev==NULL) {
+		entry->alloc = 0;
+        // do not free head node
+	} else {
+        perror("Cannot remove node from list.");
+        return -1;
+    }
+
 	return 1;
 }
 
@@ -414,11 +396,13 @@ char removeEntry(struct memoryList *entry){
 // it will automatically create a second pointer that points to the
 // remaining memory at the end of the block (if any)
 struct memoryList *newEntry(struct memoryList *entry, size_t sz) {
+  // if the requested size is the size of 'entry', give entire entry
   if (entry->size == sz) {
     entry->alloc = 1;
     return entry;
-  } else {
-    // there will always be an entry pointing there
+  }
+    // if they didn't request all of entry, split the remaining
+    // and add it to the list
   	int previousSize = entry->size;
   	entry->size = sz;
   	entry->alloc = 1;
@@ -431,43 +415,31 @@ struct memoryList *newEntry(struct memoryList *entry, size_t sz) {
   	remainingBlockEntry->size = previousSize - entry->size;
   	remainingBlockEntry->ptr = entry->ptr + entry->size;
   	remainingBlockEntry->next = NULL;
-  	
-  	struct memoryList *cursor = head;
-  	while (cursor->next != NULL) {
-  	  cursor = cursor->next;
-  	} 
-  	for (cursor = head; cursor->next != NULL; cursor = cursor->next) {}
-  	//nothing inside the for loop. Just need to get to last entry in list
-  	remainingBlockEntry->last = cursor;
-  	cursor->next = remainingBlockEntry;
-  	next = remainingBlockEntry;
-  	return entry;
-  }
+
+    // add to the linked list in sorted order
+    remainingBlockEntry->next = entry->next;
+    entry->next = remainingBlockEntry;
+    remainingBlockEntry->prev = entry;
+    return entry;
+    next = remainingBlockEntry;
+    return entry;
 }
 
 
-/** 
- * Feel free to use these functions, but do not modify them.  
- * The test code uses them, but you may ind them useful.
- */
-
-
+/********* Useful "getters" and bookkeeping tools **********/
 //Returns a pointer to the memory pool.
-void *mem_pool()
-{
+void *mem_pool() {
 	return myMemory;
 }
 
 // Returns the total number of bytes in the memory pool. */
-int mem_total()
-{
+int mem_total() {
 	return mySize;
 }
 
 
 // Get string name for a strategy. 
-char *strategy_name(strategies strategy)
-{
+char *strategy_name(strategies strategy) {
 	switch (strategy)
 	{
 		case Best:
@@ -484,43 +456,40 @@ char *strategy_name(strategies strategy)
 }
 
 // Get strategy from name.
-strategies strategyFromString(char * strategy)
-{
+strategies strategyFromString(char * strategy){
 	if (!strcmp(strategy,"best"))
-	{
 		return Best;
-	}
+	
 	else if (!strcmp(strategy,"worst"))
-	{
 		return Worst;
-	}
+	
 	else if (!strcmp(strategy,"first"))
-	{
 		return First;
-	}
+	
 	else if (!strcmp(strategy,"next"))
-	{
 		return Next;
-	}
+	
 	else
-	{
 		return 0;
-	}
 }
 
+/*************** For outputting useful information **************/
+void printList() {
+	printf("\nThe memory list contains the following data:\n");
+    printf("%4s\t%5s\t%8s\t%12s\t%12s\n","Node","Alloc","Size","From","To");
+	int i=0;
+	for (struct memoryList *cursor = head; cursor != NULL; cursor = cursor->next) {
+      printf("%4d\t%5d\t%8d\t%12lu\t%12lu\n",i++,cursor->alloc,cursor->size,
+      (long unsigned)cursor->ptr,(long unsigned)cursor->ptr+cursor->size-1);
+	}
 
-/* 
- * These functions are for you to modify however you see fit.  These will not
- * be used in tests, but you may find them useful for debugging.
- */
+}
 
 /* Use this function to print out the current contents of memory. */
 //currently commented out because code doesn't pass the prof's tests
-void print_memory()
-{	/**
-	size_t totalSize = mySize;//for a size of memory 'totalSize'
-	//in blocks/partitions of 'partitionSize'
-	size_t partitionSize = 25; //keep it 25 for now...
+void print_memory() {	
+	size_t totalSize = mySize; // for a size of memory 'totalSize'
+	size_t partitionSize = 25; // row size (# of columns)
 
 	printf("\n");
 	for (int i=0;i<75;i++) printf("=");
@@ -535,33 +504,25 @@ void print_memory()
 		printf("\n");
 	}
 	
-	printf("\nThe memory list contains the following data:\n");
-	printf("Node\tAlloc\tFrom\t\tTo\t\tSize\n");
-	int i=0;
-	for (struct memoryList *cursor = head; cursor != NULL; cursor = cursor->next) {
-	  printf("%d \t%d \t%lu \t%lu \t%d\n",i++,cursor->alloc,(long unsigned)cursor->ptr,(long unsigned)cursor->ptr+cursor->size-1,cursor->size);  
-	}
-	for (int i=0;i<75;i++) printf("=");
-	printf("\n\n\n");
-	*/
+    printList();
+    for (int i=0;i<75;i++) printf("=");
+	    printf("\n\n\n");
 	return;
 }
 
-/* Use this function to track memory allocation performance.  
+
+/** 
+ * Use this function to track memory allocation performance.  
  * This function does not depend on your implementation, 
  * but on the functions you wrote above.
  */ 
-void print_memory_status()
-{
+void print_memory_status() {
 	printf("%d out of %d bytes allocated.\n",mem_allocated(),mem_total());
 	printf("%d bytes are free in %d holes; maximum allocatable block is %d bytes.\n",mem_free(),mem_holes(),mem_largest_free());
 	printf("Average hole size is %f.\n\n",((float)mem_free())/mem_holes());
 }
-/* Use this function to see what happens when your malloc and free
- * implementations are called.  Run "mem -try <args>" to call this function.
- * We have given you a simple example to start.
- */
-void try_mymem(int argc, char **argv) {
+
+int main(int argc, char **argv) {
     strategies strat;
     void *a, *b, *c, *d, *e;
 	strat = First;
@@ -569,208 +530,20 @@ void try_mymem(int argc, char **argv) {
 	  strat = strategyFromString(argv[1]);
 	else
 	  strat = First;
-	  
-	/* A simple example.  
-	   Each algorithm should produce a different layout. */
-	/** profs code*/
+    
+	// Each algorithm should produce a different layout.
 	initmem(strat,500);
-	
-	a = mymalloc(100);
+	a = mymalloc(100);    
 	b = mymalloc(100);
 	c = mymalloc(100);
 	myfree(b);
 	d = mymalloc(50);
 	myfree(a);
 	e = mymalloc(25);
-	
-	print_memory();
-	print_memory_status();
-	
-	/** my testing code **/
-	/*
-	strat = First;
-	initmem(strat,500);
-	printf("initmem has completed. We are testing First.\n");
-  printf("There should be no memory allocated right now. Everything should be empty.\n");
-  print_memory();
-  
-	a = mymalloc(100);
-  printf("Just allocated a=100 bytes. 0 to 99 should be full.\n");
-  print_memory();
-  
-	b = mymalloc(100);
-	printf("Just allocated b=100 bytes. 100 to 199 should be full.\n");
-	print_memory(); 
-	
-	c = mymalloc(100);
-	printf("Just allocated c=100 bytes. 200 to 299 should be full.\n");
-	print_memory();
-	
-	myfree(b);
-	printf("Just freed b. 100 to 199 should be empty.\n");
-	print_memory();
-	
-	d = mymalloc(50);
-	printf("Just allocated d=50 bytes. 100 to 149 should be full.\n");
-  print_memory();
 
-	myfree(a);
-  printf("Just freed a. 0 to 99 should be free.\n");
-  print_memory();
-  
-	e = mymalloc(25);
-	printf("Just allocated e=25 bytes. 0 to 24 should be full.");
 	print_memory();
-	
-	//the printf below is to avoid warnings all the time
-	printf("a=%p, b=%p, c=%p, d=%p, e=%p, next=%p \n",a,b,c,d,e,next);
-//	print_memory();
 	print_memory_status();
-	
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////END OF FIRST////////////////////////////////////////////////
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////
-  
-  strat = Best;
-	initmem(strat,500);
-	printf("initmem has completed. We are testing Best.\n");
-  printf("There should be no memory allocated right now. Everything should be empty.\n");
-  print_memory();
-  
-	a = mymalloc(100);
-  printf("Just allocated a=100 bytes. 0 to 99 should be full.\n");
-  print_memory();
-  
-	b = mymalloc(50);
-	printf("Just allocated b=50 bytes. 100 to 149 should be full.\n");
-	print_memory(); 
-	
-	c = mymalloc(75);
-	printf("Just allocated c=75 bytes. 150 to 224 should be full.\n");
-	print_memory();
-	
-	myfree(b);
-	printf("Just freed b. 100 to 149 should be empty.\n");
-	print_memory();
-	
-	d = mymalloc(50);
-	printf("Just allocated d=50 bytes. 100 to 149 should be full.\n");
-  print_memory();
 
-	myfree(a);
-  printf("Just freed a. 0 to 99 should be free.\n");
-  print_memory();
-  
-	e = mymalloc(25);
-	printf("Just allocated e=25 bytes. 0 to 24 should be full.");
-	print_memory();
-	
-	//the printf below is to avoid warnings all the time
-	printf("a=%p, b=%p, c=%p, d=%p, e=%p, next=%p \n",a,b,c,d,e,next);
-	print_memory_status();
-	
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////END OF BEST////////////////////////////////////////////////
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////
-  
-  strat = Worst;
-	initmem(strat,500);
-	printf("initmem has completed. We are testing Worst.\n");
-  printf("There should be no memory allocated right now. Everything should be empty.\n");
-  print_memory();
-  
-	a = mymalloc(100);
-  printf("Just allocated a=100 bytes. 0 to 99 should be full.\n");
-  print_memory();
-  
-	b = mymalloc(75);
-	printf("Just allocated b=75 bytes. 100 to 174 should be full.\n");
-	print_memory(); 
-	
-	c = mymalloc(125);
-	printf("Just allocated c=125 bytes. 175 to 300 should be full.\n");
-	print_memory();
-	
-	myfree(b);
-	printf("Just freed b. 100 to 174 should be empty.\n");
-	print_memory();
-	
-	d = mymalloc(50);
-	printf("Just allocated d=50 bytes. 300 to 349 should be full.\n");
-  print_memory();
-
-	myfree(a);
-  printf("Just freed a. 0 to 99 should be free.\n");
-  print_memory();
-  
-	e = mymalloc(25);
-	printf("Just allocated e=25 bytes. 0 to 24 should be full.");
-	print_memory();
-	
-	//the printf below is to avoid warnings all the time
-	printf("a=%p, b=%p, c=%p, d=%p, e=%p, next=%p \n",a,b,c,d,e,next);
-	print_memory_status();
-	
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////END OF WORST////////////////////////////////////////////////
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////
-  
-  strat = Next;
-	initmem(strat,500);
-	printf("initmem has completed. We are testing Next.\n");
-  printf("There should be no memory allocated right now. Everything should be empty.\n");
-  print_memory();
-  
-	a = mymalloc(100);
-  printf("Just allocated a=100 bytes. 0 to 99 should be full.\n");
-  print_memory();
-  
-	b = mymalloc(250);
-	printf("Just allocated b=250 bytes. 100 to 349 should be full.\n");
-	print_memory(); 
-	
-	c = mymalloc(125);
-	printf("Just allocated c=125 bytes. 350 to 474 should be full.\n");
-	print_memory();
-	
-	myfree(b);
-	printf("Just freed b. 100 to 349 should be empty.\n");
-	print_memory();
-	
-	d = mymalloc(25);
-	printf("Just allocated d=25 bytes. 475 to 499 should be full.\n");
-  print_memory();
-
-	myfree(a);
-  printf("Just freed a. 0 to 99 should be free.\n");
-  print_memory();
-  
-	e = mymalloc(25);
-	printf("Just allocated e=25 bytes. 0 to 24 should be full.\n");
-	print_memory();
-	
-	myfree(d);
-	printf("Just freed d. 475 to 499 should be empty.\n");
-	print_memory();
-	
-	d = mymalloc(175);
-	printf("Just allocated d=175 bytes. 25 to 199 should be full.\n");
-	print_memory();
-	
-	myfree(e);
-	printf("Just freed e. 0 to 25 should be empty.\n");
-	print_memory();
-	
-	e = mymalloc(50);
-	printf("Just allocated e=50 bytes. 200 to 250 should be full.\n");
-	print_memory();
-	
-	//the printf below is to avoid warnings all the time
-	printf("a=%p, b=%p, c=%p, d=%p, e=%p, next=%p \n",a,b,c,d,e,next);
-	print_memory_status();
-	*/
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////END OF NEXT////////////////////////////////////////////////
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////
+    printf("DONE!\n");
+    return 0;
 }
-
