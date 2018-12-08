@@ -2,9 +2,6 @@
 // updated December 7th, 2018 - came back to finish what I started
 // Muhammed Orhan Celik - 100980038
 // Sysc 4001 Assignment 4 - v2.2
-// NOTE: THIS CODE DOES NOT PASS THE PROFESSORS TEST METHODS!!!
-// THE PRINT_MEMORY FUNCTION ON LINE 520 IS COMMENTED OUT
-// YOU MAY USE THAT TO CHECK IF IT PASSES TESTS.
 
 #include <stddef.h>
 #include <stdlib.h>
