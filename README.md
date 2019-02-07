@@ -19,6 +19,7 @@ where [algorithm] is one of 'first', 'best', 'worst' or 'next'
 
 TODO
 1. Move prototypes to header file
-2. Can we get rid of global variables (e.g. the one that keeps track of last allocated node?)
+2. Can we get rid of global variables (e.g. the one that keeps track of last allocated node? Make it static maybe?)
 3. Separate linked list implementation from interface - this may be difficult because the nodes are constantly split and merged
 4. Implement dynamic allocation based on user input
+5. Are there other algorithms out there that can be implemented?
