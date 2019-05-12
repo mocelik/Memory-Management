@@ -1,93 +1,44 @@
-/* March 15th, 2017 - due date
- * updated December 7th, 2018 - came back to finish what I started
- * Muhammed Orhan Celik - 100980038
- * Sysc 4001 Assignment 4 - v2.2
- */
 
+/* stddef and stdlib for size_t */
 #include <stddef.h>
 #include <stdlib.h>
-#include <string.h>
+
 #include <stdio.h>
 #include <assert.h>
+
 #include "mymem.h"
-#include <time.h>
-
-/**
- * Custom Function Declarations
- */ 
-struct memoryList *findEntry(void *);
-char removeEntry(struct memoryList *);
-struct memoryList *newEntry(struct memoryList*, size_t);
-void *firstCase(size_t);
-void *bestCase(size_t);
-void *worstCase(size_t);
-void *nextCase(size_t);
-
-struct memoryList
-{
-  /* doubly-linked list */
-  struct memoryList *prev;
-  struct memoryList *next;
-
-  int size;            /* How many bytes in this block? */
-  char alloc;          /* 1 if this block is allocated, */
-                       /* 0 if this block is free. */
-  void *ptr;           /* location of block in memory pool. */
-};
-
-strategies myStrategy = NotSet;    /* Current strategy */
-
-size_t mySize;
-void *myMemory = NULL;
-static struct memoryList *head;
-static struct memoryList *next;
 
 
-/* initmem must be called prior to mymalloc and myfree.
+static int currentAlgorithm = FIRSTFIT;
 
-   initmem may be called more than once in a given exeuction;
-   when this occurs, all memory you previously malloc'ed  *must* be freed,
-   including any existing bookkeeping data.
+static size_t memorySize;
+static void *baseAddress = NULL;
+static Node *next; /* Multiple functions use this so it must be global */
 
-   strategy must be one of the following:
-		- "best" (best-fit)
-		- "worst" (worst-fit)
-		- "first" (first-fit)
-		- "next" (next-fit)
-   sz specifies the number of bytes that will be available, in total, for all mymalloc requests.
-*/
-
-void initmem(strategies strategy, size_t sz) {
-	myStrategy = strategy;
+/* 
+ * Initializes the memory
+ */
+void initAlgorithms(int algorithm, size_t sz) {
+	terminateAlgorithms(); /* Release previously used memory */
+	currentAlgorithm = algorithm;
 
 	/* all implementations will need an actual block of memory to use */
-	mySize = sz;
+	memorySize = sz;
 
-	if (myMemory != NULL) free(myMemory); /* in case this is not the first time initmem2 is called */
-
-	/* Release any other memory being used for bookkeeping when doing a re-initialization! */
-	if (head != NULL) {
-       struct memoryList* temp;
-	   while (head != NULL) /* This will free the memoryList */
-		{
-		   temp = head;
-		   head = head->next;
-		   free(temp);
-		}
-	}
-
-
-	myMemory = malloc(sz);
+	baseAddress = malloc(sz); /* Allocate memory */
 
 	/* Initialize memory management structure. */
-	head = malloc(sizeof(struct memoryList));
-	head->size = sz;
-	head->alloc = 0;
-	head->ptr = myMemory;
-	head->prev = NULL;
-	head->next = NULL;
-	next = myMemory;
-  return;
+	initializeList(baseAddress, sz, 0);
+	
+	next = baseAddress;
+	return;
+}
+
+void terminateAlgorithms(){
+	if (baseAddress != NULL) 
+		free(baseAddress); 
+	removeAllNodes();
+	return;
 }
 
 /* Allocate a block of memory with the requested size.
@@ -97,83 +48,118 @@ void initmem(strategies strategy, size_t sz) {
  */
 
 void *mymalloc(size_t requested) {
-	assert((int)myStrategy > 0 && requested>=1);
+	assert((int)currentAlgorithm > 0 && requested>=1);
 	
-	switch (myStrategy) {
-        case NotSet: 
-                return NULL;
-        case First:
+	switch (currentAlgorithm) {
+		
+        case FIRSTFIT:
                 return firstCase(requested);
-        case Best:
+        case BESTFIT:
                 return bestCase(requested);
-        case Worst:
+        case WORSTFIT:
                 return worstCase(requested);
-        case Next:
+        case NEXTFIT:
                 return nextCase(requested);
+        default:
+				return NULL;
     }
-	return NULL;
 }
 
-void *firstCase(size_t requested) {
-	struct memoryList *cursor;
-	for (cursor = head; cursor!= NULL; cursor = cursor->next) {
-			  if (cursor->size >= requested && cursor->alloc == 0) {
-				  return newEntry(cursor, requested)->ptr;
+/*
+ * This allocates all or part of the memory block depending on
+ * the size of the block and the size requested
+ */ 
+Node *allocate(Node *block, size_t sz){
+	if (block == NULL) return NULL;
+	/* if the requested size is the size of block, give entire block */
+	if (getSize(block) == sz) {
+		setAlloc(block, 1);
+		return block;
+	}
+	
+	/* If they didn't request all of the block, split the remaining
+	 and add it to the list */
+	int leftoverSize = getSize(block) - sz;
+	setSize(block, sz);
+	setAlloc(block, 1);
+
+	/* now we need to make a new entry to point to the remaining
+	   memory in that block */	
+	next = addSuccessor(block, getPtr(block) + getSize(block), 
+							leftoverSize, 0);
+							
+	return block;
+}
+
+void *firstCase(size_t requestedSize) {
+	Node *cursor;
+	for (cursor = getFirst(); cursor!= NULL; cursor = getSuccessor(cursor)){
+			  if (getSize(cursor) >= requestedSize && !isAlloc(cursor)) {
+				  return getPtr(allocate(cursor, requestedSize));
 			  }
 	}
 	perror("Could not allocate that much data!");
 	return NULL;
 }
 
-void *bestCase(size_t requested){
-	int closest = mySize; /* realistically this is the biggest it can be... */
-	struct memoryList *bestNode = NULL;
-	struct memoryList *cursor;
-	for (cursor = head; cursor!=NULL; cursor = cursor->next) {
-		if (!cursor->alloc && (cursor->size - requested < closest) && (cursor->size >= requested) ) {
-			closest = cursor->size - requested;
+void *bestCase(size_t requestedSize){
+	int closestSize = memorySize; /* realistically this is the biggest it can be... */
+	Node *bestNode = NULL;
+	Node *cursor;
+	size_t cursorSize;
+	for (cursor = getFirst(); cursor!=NULL; cursor = getSuccessor(cursor)) {
+		cursorSize = getSize(cursor);
+		if (!isAlloc(cursor) && (cursorSize - requestedSize < closestSize) && (cursorSize >= requestedSize) ) {
+			closestSize = cursorSize - requestedSize;
 			bestNode = cursor;
-			if (closest == 0) break; /* As close to the size as it can get */
+			if (closestSize == 0) break; /* As close to the size as it can get */
 	    }
 	}
     if (bestNode==NULL) {
 		perror("Could not allocate that much data!");
 		return NULL;
 	}
-	return newEntry(bestNode, requested)->ptr;
+	return getPtr(allocate(bestNode, requestedSize));
 }
 
-void *worstCase(size_t requested){
-	int furthest = 0;
-	struct memoryList *bestNode = NULL;
-	struct memoryList *cursor;
-	for (cursor = head; cursor!=NULL; cursor = cursor->next) {
-		if (!cursor->alloc && (cursor->size - requested > furthest) && (cursor->size > requested)) {
-			furthest = cursor->size - requested;
+void *worstCase(size_t requestedSize){
+	int furthestSize = 0;
+	Node *bestNode = NULL;
+	Node *cursor;
+	size_t cursorSize;
+	
+	for (cursor = getFirst(); cursor!=NULL; cursor = getSuccessor(cursor)) {
+		cursorSize = getSize(cursor);
+		if (!isAlloc(cursor) && (cursorSize - requestedSize > furthestSize) && (cursorSize > requestedSize)) {
+			furthestSize = cursorSize - requestedSize;
 			bestNode = cursor;
-	  }
+	    }
 	}
     if (bestNode==NULL) {
 		perror("Could not allocate that much data!");
 		return NULL;
 	}
-	return newEntry(bestNode, requested)->ptr;
+	return getPtr(allocate(bestNode, requestedSize));
 }
 
-void *nextCase(size_t requested){
-	/*try finding a spot starting at 'next' */
-	struct memoryList *cursor;
-	for (cursor = next; cursor!= NULL; cursor = cursor->next) {
-			  if (cursor->size >= requested && cursor->alloc == 0) {
-				  return newEntry(cursor, requested)->ptr;
-			  }
+void *nextCase(size_t requestedSize){
+	/* try finding a spot starting at 'next' */
+	Node *cursor;
+	size_t cursorSize;
+	
+	for (cursor = next; cursor!= NULL; cursor = getSuccessor(cursor)) {
+		cursorSize = getSize(cursor);
+		if (cursorSize >= requestedSize && !isAlloc(cursor)) {
+			return getPtr(allocate(cursor, requestedSize));
+		}
 	}
 
-	/* if none, wrap around and try again starting from 'head' */
-	for (cursor = head; cursor!= next; cursor = cursor->next) {
-			  if (cursor->size >= requested && cursor->alloc == 0) {
-				  return newEntry(cursor, requested)->ptr;
-			  }
+	/* if none, wrap around and try again starting from the beginning */
+	for (cursor = getFirst(); cursor!= next; cursor = getSuccessor(cursor)) {
+		cursorSize = getSize(cursor);
+		if (cursorSize >= requestedSize && !isAlloc(cursor)) {
+			return getPtr(allocate(cursor, requestedSize));
+		}
 	}
 
 	perror("Could not allocate that much data!");
@@ -181,14 +167,18 @@ void *nextCase(size_t requested){
 }
 
 /* Frees a block of memory previously allocated by mymalloc. */
-void myfree(void* block){
-	if (block==NULL) return;
-	if (block<myMemory || block>(myMemory+mySize)) return;
+void myfree(void* ptr){
+	if (ptr==NULL) return;
+	if (ptr<baseAddress || ptr>(baseAddress+memorySize)) return;
+	
 	/* first, we must find the memorylist entry that points to that block */
-	struct memoryList *entry = findEntry(block); 
-    struct memoryList *tempPrevious= entry->prev; 
-    struct memoryList *tempNext = entry->next;
-
+	Node *block = getNode(ptr);
+    Node *prevBlock= getPredecessor(block); 
+    Node *nextBlock = getSuccessor(block);
+    
+    size_t blockSize = getSize(block),
+			prevSize = getSize(prevBlock),
+			nextSize = getSize(nextBlock);
 	/* there are 4 common cases:
 	 * case 1.1: the block before is free			after is free
 	 * case 1.2: the block before is free, 		    after is allocated
@@ -204,88 +194,94 @@ void myfree(void* block){
 	 */ 
 	
     /* if block isn't at beginning or end of pool */
-	if ( (block != myMemory) && (block + entry->size != (myMemory+mySize)) ) {
+	if ( (ptr != baseAddress) && (ptr + blockSize != (baseAddress+memorySize)) ) {
         /* we know that there are nodes right before and right after entry */
 
         
         /* case 1.1: previous is free && next is free */
-		if ( (!tempPrevious->alloc) && (!tempNext->alloc) ) {
+		if ( (!isAlloc(prevBlock)) && (!isAlloc(nextBlock)) ) {
 			/* case 1: the block before is free			after is free
 			   if case 1: merge the PREVIOUS with current and NEXT */
-			tempPrevious->size = tempPrevious->size + entry->size + tempNext->size;
-			removeEntry(tempNext);
-			removeEntry(entry);
+			setSize(prevBlock, prevSize + blockSize + nextSize);
+			removeNode(nextBlock);
+			removeNode(block);
+			return;
 		
         /* case 1.2: previous is free && next is alloc */
-		} else if ((!tempPrevious->alloc) && (tempNext->alloc)) {
+		} else if (!isAlloc(prevBlock) && (isAlloc(nextBlock))) {
 
 			/* merge the PREVIOUS with current
 			  -> keep PREVIOUS entry, remove current entry
 			  -> but first, update the previous size
               -> alloc is already 0 
              */
-			tempPrevious->size = tempPrevious->size + entry->size;
-			removeEntry(entry);
+            setSize(prevBlock, prevSize + blockSize);
+			removeNode(block);
+			return;
 		
         /* case 1.3:  previous is alloc && next is free */
-		} else if ((tempPrevious->alloc) && (!tempNext->alloc)) {
+		} else if (isAlloc(prevBlock) && !isAlloc(nextBlock)) {
 			
             /* merge the current with NEXT
 			  -> update size of current
               -> update alloc
               -> remove next entry
             */ 
-			entry->size = entry->size + tempNext->size;
-			entry->alloc = 0;
-			removeEntry(tempNext);
+            setSize(block, blockSize + nextSize);
+			setAlloc(block, 0);
+			removeNode(nextBlock);
+			return;
 
-		
         /* case 1.4: previous is alloc && next is alloc */
-		} else if ((tempPrevious->alloc) && (tempNext->alloc)) {
+		} else if (isAlloc(prevBlock) && isAlloc(nextBlock)) {
 			
             /* don't need to do anything with other nodes
                just set alloc to 0
              */ 
-			entry->alloc = 0;
+            setAlloc(block, 0);
+			return;
 			
-		} else {
-			perror("Trying to remove a block in an unknown location (2).");
 		}
         
     /* case 2.5: block takes up all of memory */
-	} else if (block == myMemory && (entry->size == mySize)){ 
-		entry->alloc = 0;	
+	} else if (ptr == baseAddress && (blockSize == memorySize)){ 
+		setAlloc(block, 0);
+		return;
 
     /* case 2.1 or 2.2: block is at beginning of pool */
-	} else if (block == myMemory && (entry->size != mySize)) {
-
+	} else if (ptr == baseAddress && (blockSize != memorySize)) {
+		
         /* case 2.2: next block is allocated */
-		if (tempNext->alloc) {
-			entry->alloc = 0;
+		if (isAlloc(nextBlock)) {
+			setAlloc(block, 0);
+			return;
         
         /* case 2.1: next block is free */
 		} else {
-			entry->size = entry->size + tempNext->size;
-			entry->alloc = 0;
-			removeEntry(tempNext);			
+			setSize(block, blockSize + nextSize);
+			setAlloc(block, 0);
+			removeNode(nextBlock);			
+			return;
 		}
     
     /* case 2.3 or 2.4: block is at end of pool */
-	} else if (block != myMemory && (block + entry->size == myMemory+mySize)) {
+	} else if (ptr != baseAddress && (ptr + blockSize == baseAddress+memorySize)) {
 		/* two possibilities: the previous block is either free or allocated */
 
         /* case 2.4: previous block is allocated */
-		if (tempPrevious->alloc) {
-			entry->alloc = 0;
+		if (isAlloc(prevBlock)) {
+			setAlloc(block, 0);
+			return;
         
         /* case 2.3: previous block is free */
 		} else {
-			tempPrevious->size = tempPrevious->size + entry->size;
-			removeEntry(entry);		
+			setSize(prevBlock, prevSize + blockSize);
+			removeNode(block);
+			return;		
 		}
-	} else {
-	  perror("Trying to remove a block in an unknown location (1).");
 	}
+	perror("Trying to remove a block in an unknown location...");
+
 
 	return;
 }
@@ -300,9 +296,9 @@ void myfree(void* block){
 int mem_holes()
 {
 	int holes = 0;
-	struct memoryList *cursor;
-	for (cursor = head; cursor!=NULL; cursor=cursor->next)
-		if (!cursor->alloc)  
+	Node *cursor;
+	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor))
+		if (!isAlloc(cursor))
 			holes++;
 	return holes;
 }
@@ -311,10 +307,10 @@ int mem_holes()
 int mem_allocated()
 {
 	int allocated = 0;
-	struct memoryList *cursor;
-	for (cursor = head; cursor!=NULL; cursor=cursor->next)
-		if (cursor->alloc) 
-			allocated += cursor->size;
+	Node *cursor;
+	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor))
+		if (isAlloc(cursor)) 
+			allocated += getSize(cursor);
 	return allocated;
 }
 
@@ -322,10 +318,10 @@ int mem_allocated()
 int mem_free()
 {
 	int count=0;
-	struct memoryList *cursor;
-	for (cursor = head; cursor!=NULL; cursor=cursor->next){
-		if (!cursor->alloc) {
-			count+=cursor->size;
+	Node *cursor;
+	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor)){
+		if (!isAlloc(cursor)) {
+			count += getSize(cursor);
 		}
 	}
 	return count;
@@ -335,10 +331,10 @@ int mem_free()
 int mem_largest_free()
 {
 	int largest = 0;
-	struct memoryList *cursor;
-	for (cursor = head; cursor!=NULL; cursor=cursor->next)
-		if ( cursor->size > largest && !cursor->alloc) 
-			largest = cursor->size;
+	Node *cursor;
+	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor))
+		if ( getSize(cursor) > largest && !isAlloc(cursor)) 
+			largest = getSize(cursor);
 	return largest;
 }
 
@@ -348,9 +344,9 @@ int mem_small_free(int size)
 	/* traverses the memoryList and records the ones with sizes less
 	   than size */
 	int count = 0;
-	struct memoryList *cursor;
-	for (cursor = head; cursor!=NULL; cursor=cursor->next){
-		if ( cursor->size <= size && (!cursor->alloc) ){ 
+	Node *cursor;
+	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor)){
+		if ( getSize(cursor) <= size && (!isAlloc(cursor)) ){ 
 			count++;
 		}
 	}
@@ -362,139 +358,20 @@ int mem_small_free(int size)
  */
 char mem_is_alloc(void *ptr) {
 	if (ptr==NULL) return -1;
-	if (ptr<myMemory || ptr>(myMemory+mySize)) return -1;
-    return findEntry(ptr)->alloc;
-}
-
-/* returns a pointer to the memoryList entry
- * that points to the block containing the ptr
- */
-struct memoryList *findEntry(void *ptr) {
-	if (ptr==NULL) return NULL;
-	if (ptr<myMemory || ptr>(myMemory+mySize)) return NULL;
-	struct memoryList *cursor;
-	for (cursor = head; cursor != NULL; cursor= cursor->next){
-		if ( (ptr >= cursor->ptr) && 
-		    (ptr < ((cursor->ptr) + (cursor->size)) )) {
-			return cursor;
-		}
-	}
-	perror("There is no corresponding entry...\n");
-	return NULL;	
-}
-
-/* This removes a node from the doubley linked memoryList */
-char removeEntry(struct memoryList *entry){
-	if (entry==NULL) return -1;
-    /* if node is in between two nodes */
-	if (entry->next != NULL && entry->prev != NULL) { 
-		(entry->next)->prev = entry->prev; 
-		(entry->prev)->next = entry->next;
-        free(entry);
-	
-    /* if node is last in list */
-	} else if (entry->next==NULL && entry->prev!=NULL){
-		(entry->prev)->next = NULL;	
-        free(entry);
-
-    /* if node is first in list */
-	} else if (entry->next!=NULL && entry->prev==NULL) {
-		head = entry->next;
-		free(entry);
-
-    /* if node is the only node in list */
-	} else if (entry->next==NULL && entry->prev==NULL) {
-		entry->alloc = 0;
-        /* do not free head node */
-	} else {
-        perror("Cannot remove node from list.");
-        return -1;
-    }
-
-	return 1;
-}
-
-/* This creates a new memoryList entry with a given pointer and size 
- * it will automatically create a second pointer that points to the 
- * remaining memory at the end of the block (if any)
-*/ 
-struct memoryList *newEntry(struct memoryList *entry, size_t sz) {
-	if (entry == NULL) return NULL;
-  /* if the requested size is the size of 'entry', give entire entry */
-  if (entry->size == sz) {
-    entry->alloc = 1;
-    return entry;
-  }
-    /* if they didn't request all of entry, split the remaining
-     and add it to the list */
-  	int previousSize = entry->size;
-  	entry->size = sz;
-  	entry->alloc = 1;
-  	/* entry already points there */
-  	
-  	/* now we need to make a new entry to point to the remaining
-  	   memory in that block */
-  	struct memoryList *remainingBlockEntry = malloc(sizeof(struct memoryList));
-  	remainingBlockEntry->alloc = 0;
-  	remainingBlockEntry->size = previousSize - entry->size;
-  	remainingBlockEntry->ptr = entry->ptr + entry->size;
-  	remainingBlockEntry->next = NULL;
-
-    /* add to the linked list in sorted order */
-    remainingBlockEntry->next = entry->next;
-    entry->next = remainingBlockEntry;
-    remainingBlockEntry->prev = entry;
-    return entry;
-    next = remainingBlockEntry;
-    return entry;
+	if (ptr<baseAddress || ptr>(baseAddress+memorySize)) return -1;
+    return isAlloc(getNode(ptr));
 }
 
 
 /********* Useful "getters" and bookkeeping tools **********/
 /* Returns a pointer to the memory pool. */
 void *mem_pool() {
-	return myMemory;
+	return baseAddress;
 }
 
 /* Returns the total number of bytes in the memory pool. */
 int mem_total() {
-	return mySize;
-}
-
-
-/* Get string name for a strategy. */
-char *strategy_name(strategies strategy) {
-	switch (strategy)
-	{
-		case Best:
-			return "best";
-		case Worst:
-			return "worst";
-		case First:
-			return "first";
-		case Next:
-			return "next";
-		default:
-			return "unknown";
-	}
-}
-
-/* Get strategy from name. */
-strategies strategyFromString(char * strategy){
-	if (!strcmp(strategy,"best"))
-		return Best;
-	
-	else if (!strcmp(strategy,"worst"))
-		return Worst;
-	
-	else if (!strcmp(strategy,"first"))
-		return First;
-	
-	else if (!strcmp(strategy,"next"))
-		return Next;
-	
-	else
-		return 0;
+	return memorySize;
 }
 
 
@@ -508,17 +385,19 @@ void printList() {
 	printf("\nThe memory list contains the following data:\n");
     printf("%4s\t%5s\t%8s\t%12s\t%12s\n","Node","Alloc","Size","From","To");
 	int i=0;
-	struct memoryList *cursor;
-	for (cursor = head; cursor != NULL; cursor = cursor->next) {
-      printf("%4d\t%5d\t%8d\t%12lu\t%12lu\n",i++,cursor->alloc,cursor->size,
-      (long unsigned)cursor->ptr,(long unsigned)cursor->ptr+cursor->size-1);
+	Node *cursor;
+	for (cursor = getFirst(); cursor != NULL; cursor=getSuccessor(cursor)) {
+      printf("%4d\t%5d\t%8ld\t%12lu\t%12lu\n", i++, isAlloc(cursor), getSize(cursor),
+        (long unsigned) getPtr(cursor),
+		(long unsigned) getPtr(cursor) + getSize(cursor) - 1
+	  );
 	}
 
 }
 
 /* Use this function to print out the current contents of memory. */
 void print_memory() {	
-	size_t totalSize = mySize; /* for a size of memory 'totalSize' */
+	size_t totalSize = memorySize; /* for a size of memory 'totalSize' */
 	size_t partitionSize = 25; /* row size (# of columns) */
 
 	printf("\n");
@@ -530,9 +409,9 @@ void print_memory() {
 	size_t i;
 	size_t j;
 	for (i=0; i < totalSize; i+=partitionSize) {
-		printf("From %lu to %lu\t",i, (i+partitionSize-1));
+		printf("From %lu to %lu\t", i, (i+partitionSize-1));
 		for (j=0; j < partitionSize; j++) {
-			printf("%d", mem_is_alloc(myMemory+i+j));
+			printf("%d", mem_is_alloc(baseAddress+i+j));
 		}
 		printf("\n");
 	}
@@ -555,28 +434,4 @@ void print_memory_status() {
 	printf("Average hole size is %f.\n\n",((float)mem_free())/mem_holes());
 }
 
-int main(int argc, char **argv) {
-    strategies strat;
-    void *a, *b, *c, *d, *e;
-	strat = First;
-	if(argc > 1)
-	  strat = strategyFromString(argv[1]);
-	else
-	  strat = First;
-    
-	/* Each algorithm should produce a different layout. */
-	initmem(strat,500);
-	a = mymalloc(100);    
-	b = mymalloc(100);
-	c = mymalloc(100);
-	myfree(b);
-	d = mymalloc(50);
-	myfree(a);
-	e = mymalloc(25);
 
-	print_memory();
-	print_memory_status();
-
-    printf("DONE!\n");
-    return 0;
-}

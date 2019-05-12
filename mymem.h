@@ -1,22 +1,31 @@
+#ifndef MYMEM_H
+#define MYMEM_H
+
 #include <stddef.h>
+#include "llist.h"
+#include "node.h"
 
-typedef enum strategies_enum
-{
-	NotSet = 0,
-	Best = 1,
-	Worst = 2,
-	First = 3,
-	Next = 4
-} strategies;
+/* Algorithms */
+#define FIRSTFIT 1
+#define BESTFIT  2
+#define WORSTFIT 3
+#define NEXTFIT  4
 
-char *strategy_name(strategies strategy);
-strategies strategyFromString(char * strategy);
-
-
-void initmem(strategies strategy, size_t sz);
+void initAlgorithms(int algorithm, size_t sz);
+void terminateAlgorithms();
 void *mymalloc(size_t requested);
+Node *allocate(Node *, size_t);
+
+void *firstCase(size_t);
+void *bestCase(size_t);
+void *worstCase(size_t);
+void *nextCase(size_t);
+
 void myfree(void* block);
 
+
+
+/* Book keeping functions */
 int mem_holes();
 int mem_allocated();
 int mem_free();
@@ -27,4 +36,5 @@ char mem_is_alloc(void *ptr);
 void* mem_pool();
 void print_memory();
 void print_memory_status();
-void try_mymem(int argc, char **argv);
+
+#endif
