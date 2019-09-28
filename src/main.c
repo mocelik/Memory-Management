@@ -36,13 +36,14 @@ int main(int argc, char **argv) {
     
 	/* The following is a demo to show the algorithm differences. */
 	initAlgorithms(algorithm,500);
-	
-	a = mymalloc(100);    
-	b = mymalloc(100);
-	c = mymalloc(100);
+	a = mymalloc(101);
+	b = mymalloc(102);
+	c = mymalloc(103);
 	myfree(b);
+	printf("Passed first free.\n");
 	d = mymalloc(50);
 	myfree(a);
+	printf("Passed 2nd free.\n");
 	e = mymalloc(25);
 
 	print_memory();
@@ -51,5 +52,5 @@ int main(int argc, char **argv) {
 	terminateAlgorithms();
 	
     printf("DONE!\n");
-
+    return 0;
 }

@@ -8,13 +8,23 @@
 
 #include "mymem.h"
 
-
+/** GLOBAL VARIABLES */
 static int currentAlgorithm = FIRSTFIT;
 
 static size_t memorySize;
 static void *baseAddress = NULL;
 static Node *next; /* Multiple functions use this so it must be global */
 
+/** Internal Functions */
+static pageTableEntry *allocate(void *, size_t);
+static void *firstCase(size_t);
+static void *bestCase(size_t);
+static void *worstCase(size_t);
+static void *nextCase(size_t);
+
+
+
+/** EXTERNAL FUNCTIONS */
 /* 
  * Initializes the memory
  */
@@ -28,7 +38,8 @@ void initAlgorithms(int algorithm, size_t sz) {
 	baseAddress = malloc(sz); /* Allocate memory */
 
 	/* Initialize memory management structure. */
-	initializeList(baseAddress, sz, 0);
+	pageTableEntry *en = newEntry(baseAddress, sz, 0);
+	initializeList(en);
 	
 	next = baseAddress;
 	return;
@@ -49,6 +60,7 @@ void terminateAlgorithms(){
 
 void *mymalloc(size_t requested) {
 	assert((int)currentAlgorithm > 0 && requested>=1);
+	    
 	
 	switch (currentAlgorithm) {
 		
@@ -65,116 +77,27 @@ void *mymalloc(size_t requested) {
     }
 }
 
-/*
- * This allocates all or part of the memory block depending on
- * the size of the block and the size requested
- */ 
-Node *allocate(Node *block, size_t sz){
-	if (block == NULL) return NULL;
-	/* if the requested size is the size of block, give entire block */
-	if (getSize(block) == sz) {
-		setAlloc(block, 1);
-		return block;
-	}
-	
-	/* If they didn't request all of the block, split the remaining
-	 and add it to the list */
-	int leftoverSize = getSize(block) - sz;
-	setSize(block, sz);
-	setAlloc(block, 1);
-
-	/* now we need to make a new entry to point to the remaining
-	   memory in that block */	
-	next = addSuccessor(block, getPtr(block) + getSize(block), 
-							leftoverSize, 0);
-							
-	return block;
-}
-
-void *firstCase(size_t requestedSize) {
-	Node *cursor;
-	for (cursor = getFirst(); cursor!= NULL; cursor = getSuccessor(cursor)){
-			  if (getSize(cursor) >= requestedSize && !isAlloc(cursor)) {
-				  return getPtr(allocate(cursor, requestedSize));
-			  }
-	}
-	perror("Could not allocate that much data!");
-	return NULL;
-}
-
-void *bestCase(size_t requestedSize){
-	int closestSize = memorySize; /* realistically this is the biggest it can be... */
-	Node *bestNode = NULL;
-	Node *cursor;
-	size_t cursorSize;
-	for (cursor = getFirst(); cursor!=NULL; cursor = getSuccessor(cursor)) {
-		cursorSize = getSize(cursor);
-		if (!isAlloc(cursor) && (cursorSize - requestedSize < closestSize) && (cursorSize >= requestedSize) ) {
-			closestSize = cursorSize - requestedSize;
-			bestNode = cursor;
-			if (closestSize == 0) break; /* As close to the size as it can get */
-	    }
-	}
-    if (bestNode==NULL) {
-		perror("Could not allocate that much data!");
-		return NULL;
-	}
-	return getPtr(allocate(bestNode, requestedSize));
-}
-
-void *worstCase(size_t requestedSize){
-	int furthestSize = 0;
-	Node *bestNode = NULL;
-	Node *cursor;
-	size_t cursorSize;
-	
-	for (cursor = getFirst(); cursor!=NULL; cursor = getSuccessor(cursor)) {
-		cursorSize = getSize(cursor);
-		if (!isAlloc(cursor) && (cursorSize - requestedSize > furthestSize) && (cursorSize > requestedSize)) {
-			furthestSize = cursorSize - requestedSize;
-			bestNode = cursor;
-	    }
-	}
-    if (bestNode==NULL) {
-		perror("Could not allocate that much data!");
-		return NULL;
-	}
-	return getPtr(allocate(bestNode, requestedSize));
-}
-
-void *nextCase(size_t requestedSize){
-	/* try finding a spot starting at 'next' */
-	Node *cursor;
-	size_t cursorSize;
-	
-	for (cursor = next; cursor!= NULL; cursor = getSuccessor(cursor)) {
-		cursorSize = getSize(cursor);
-		if (cursorSize >= requestedSize && !isAlloc(cursor)) {
-			return getPtr(allocate(cursor, requestedSize));
-		}
-	}
-
-	/* if none, wrap around and try again starting from the beginning */
-	for (cursor = getFirst(); cursor!= next; cursor = getSuccessor(cursor)) {
-		cursorSize = getSize(cursor);
-		if (cursorSize >= requestedSize && !isAlloc(cursor)) {
-			return getPtr(allocate(cursor, requestedSize));
-		}
-	}
-
-	perror("Could not allocate that much data!");
-	return NULL;
-}
-
 /* Frees a block of memory previously allocated by mymalloc. */
 void myfree(void* ptr){
 	if (ptr==NULL) return;
-	if (ptr<baseAddress || ptr>(baseAddress+memorySize)) return;
+	if (ptr<baseAddress || ptr>=(baseAddress+memorySize)) return;
 	
 	/* first, we must find the memorylist entry that points to that block */
-	Node *block = getNode(ptr);
-    Node *prevBlock= getPredecessor(block); 
-    Node *nextBlock = getSuccessor(block);
+	void *referenceNode = getNode(ptr,containsAddress);
+	
+	pageTableEntry *block = (pageTableEntry *) getData(referenceNode);
+	/**DEBUGGING STOPPED HERE. ITS 2 AM AND NO ONE IS EVER GOING TO READ THIS. */
+	printf("1 block found.\n");
+	Node *tn = (Node *) referenceNode;
+	printf("tn->data->size = %p\n",((pageTableEntry *)tn->data)->ptr);
+	Node *t = getPredecessor(referenceNode);
+	printf("t found.\n");
+	
+    pageTableEntry *prevBlock = (pageTableEntry *) getData(getPredecessor(referenceNode)); 
+    printf("2 blocks found.\n");
+    pageTableEntry *nextBlock = (pageTableEntry *) getData(getSuccessor(referenceNode));
+    printf("3 blocks found.\n");
+    
     
     size_t blockSize = getSize(block),
 			prevSize = getSize(prevBlock),
@@ -203,8 +126,8 @@ void myfree(void* ptr){
 			/* case 1: the block before is free			after is free
 			   if case 1: merge the PREVIOUS with current and NEXT */
 			setSize(prevBlock, prevSize + blockSize + nextSize);
-			removeNode(nextBlock);
-			removeNode(block);
+			removeNode(getSuccessor(referenceNode));
+			removeNode(referenceNode);
 			return;
 		
         /* case 1.2: previous is free && next is alloc */
@@ -216,7 +139,7 @@ void myfree(void* ptr){
               -> alloc is already 0 
              */
             setSize(prevBlock, prevSize + blockSize);
-			removeNode(block);
+			removeNode(referenceNode);
 			return;
 		
         /* case 1.3:  previous is alloc && next is free */
@@ -229,7 +152,7 @@ void myfree(void* ptr){
             */ 
             setSize(block, blockSize + nextSize);
 			setAlloc(block, 0);
-			removeNode(nextBlock);
+			removeNode(getSuccessor(referenceNode));
 			return;
 
         /* case 1.4: previous is alloc && next is alloc */
@@ -260,7 +183,7 @@ void myfree(void* ptr){
 		} else {
 			setSize(block, blockSize + nextSize);
 			setAlloc(block, 0);
-			removeNode(nextBlock);			
+			removeNode(getSuccessor(referenceNode));			
 			return;
 		}
     
@@ -276,7 +199,7 @@ void myfree(void* ptr){
         /* case 2.3: previous block is free */
 		} else {
 			setSize(prevBlock, prevSize + blockSize);
-			removeNode(block);
+			removeNode(referenceNode);
 			return;		
 		}
 	}
@@ -285,6 +208,121 @@ void myfree(void* ptr){
 
 	return;
 }
+/** Internal Functions */
+/* 
+ * This allocates all or part of the memory block depending on
+ * the size of the block and the size requested
+ */ 
+static pageTableEntry *allocate(void *node, size_t sz){
+
+	if (node == NULL) return NULL;
+	pageTableEntry *block = getData(node);
+	/* if the requested size is the size of block, give entire block */
+	if (getSize(block) == sz) {
+		setAlloc(block, 1);
+		return block;
+	}
+	
+	/* If they didn't request all of the block, split the remaining
+	 and add it to the list */
+	int leftoverSize = getSize(block) - sz;
+	setSize(block, sz);
+	setAlloc(block, 1);
+
+	/* now we need to make a new entry to point to the remaining
+	   memory in that block */	
+	next = addSuccessor(node, 
+			newEntry(getPtr(block) + getSize(block), leftoverSize, 0));
+							
+	return block;
+}
+
+static void *firstCase(size_t requestedSize) {
+	void *cursor;
+	pageTableEntry *block;
+	for (cursor = getFirst(); cursor!= NULL; cursor = getSuccessor(cursor)){
+		block = getData(cursor);
+		if (block->size >= requestedSize && !block->alloc) {
+			return allocate(cursor, requestedSize)->ptr;
+		}
+	}
+	perror("Could not allocate that much data!");
+	return NULL;
+}
+
+static void *bestCase(size_t requestedSize){
+	int closestSize = memorySize; /* realistically this is the biggest it can be... */
+	void *bestNode = NULL;
+	void *cursor;
+	size_t blockSize;
+	pageTableEntry *block;
+	
+	for (cursor = getFirst(); cursor!=NULL; cursor = getSuccessor(cursor)) {
+		block = getData(cursor);
+		blockSize = block->size;
+		
+		if (!block->size && (blockSize - requestedSize < closestSize) && (blockSize >= requestedSize) ) {
+			closestSize = blockSize - requestedSize;
+			bestNode = cursor;
+			if (closestSize == 0) break; /* As close to the size as it can get */
+	    }
+	}
+    if (bestNode==NULL) {
+		perror("Could not allocate that much data!");
+		return NULL;
+	}
+	return allocate(bestNode, requestedSize)->ptr;
+}
+
+static void *worstCase(size_t requestedSize){
+	int furthestSize = 0;
+	Node *bestNode = NULL;
+	Node *cursor;
+	size_t blockSize;
+	pageTableEntry *block;
+	
+	for (cursor = getFirst(); cursor!=NULL; cursor = getSuccessor(cursor)) {
+		block = getData(cursor);
+		blockSize = getSize(block);
+		if (!isAlloc(block) && (blockSize - requestedSize > furthestSize) && (blockSize > requestedSize)) {
+			furthestSize = blockSize - requestedSize;
+			bestNode = cursor;
+	    }
+	}
+    if (bestNode==NULL) {
+		perror("Could not allocate that much data!");
+		return NULL;
+	}
+	return getPtr(allocate(bestNode, requestedSize));
+}
+
+static void *nextCase(size_t requestedSize){
+	/* try finding a spot starting at 'next' */
+	Node *cursor;
+	size_t blockSize;
+	pageTableEntry *block;
+	
+	for (cursor = next; cursor!= NULL; cursor = getSuccessor(cursor)) {
+		block = getData(cursor);
+		blockSize = getSize(block);
+		if (blockSize >= requestedSize && !isAlloc(block)) {
+			return getPtr(allocate(cursor, requestedSize));
+		}
+	}
+
+	/* if none, wrap around and try again starting from the beginning */
+	for (cursor = getFirst(); cursor!= next; cursor = getSuccessor(cursor)) {
+		block = getData(cursor);
+		blockSize = getSize(block);
+		if (blockSize >= requestedSize && !isAlloc(block)) {
+			return getPtr(allocate(cursor, requestedSize));
+		}
+	}
+
+	perror("Could not allocate that much data!");
+	return NULL;
+}
+
 
 /****** Memory status/property functions ******
  * Implement these functions.
@@ -298,7 +336,7 @@ int mem_holes()
 	int holes = 0;
 	Node *cursor;
 	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor))
-		if (!isAlloc(cursor))
+		if (!isAlloc(getData(cursor)))
 			holes++;
 	return holes;
 }
@@ -309,8 +347,8 @@ int mem_allocated()
 	int allocated = 0;
 	Node *cursor;
 	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor))
-		if (isAlloc(cursor)) 
-			allocated += getSize(cursor);
+		if (isAlloc(getData(cursor))) 
+			allocated += getSize(getData(cursor));
 	return allocated;
 }
 
@@ -320,8 +358,8 @@ int mem_free()
 	int count=0;
 	Node *cursor;
 	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor)){
-		if (!isAlloc(cursor)) {
-			count += getSize(cursor);
+		if (!isAlloc(getData(cursor))) {
+			count += getSize(getData(cursor));
 		}
 	}
 	return count;
@@ -333,8 +371,8 @@ int mem_largest_free()
 	int largest = 0;
 	Node *cursor;
 	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor))
-		if ( getSize(cursor) > largest && !isAlloc(cursor)) 
-			largest = getSize(cursor);
+		if ( getSize(getData(cursor)) > largest && !isAlloc(getData(cursor))) 
+			largest = getSize(getData(cursor));
 	return largest;
 }
 
@@ -346,7 +384,7 @@ int mem_small_free(int size)
 	int count = 0;
 	Node *cursor;
 	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor)){
-		if ( getSize(cursor) <= size && (!isAlloc(cursor)) ){ 
+		if ( getSize(getData(cursor)) <= size && (!isAlloc(getData(cursor))) ){ 
 			count++;
 		}
 	}
@@ -359,7 +397,7 @@ int mem_small_free(int size)
 char mem_is_alloc(void *ptr) {
 	if (ptr==NULL) return -1;
 	if (ptr<baseAddress || ptr>(baseAddress+memorySize)) return -1;
-    return isAlloc(getNode(ptr));
+    return isAlloc(getNode(ptr, containsAddress));
 }
 
 
@@ -385,11 +423,13 @@ void printList() {
 	printf("\nThe memory list contains the following data:\n");
     printf("%4s\t%5s\t%8s\t%12s\t%12s\n","Node","Alloc","Size","From","To");
 	int i=0;
-	Node *cursor;
+	void *cursor;
+	pageTableEntry *block;
 	for (cursor = getFirst(); cursor != NULL; cursor=getSuccessor(cursor)) {
-      printf("%4d\t%5d\t%8ld\t%12lu\t%12lu\n", i++, isAlloc(cursor), getSize(cursor),
-        (long unsigned) getPtr(cursor),
-		(long unsigned) getPtr(cursor) + getSize(cursor) - 1
+		block = getData(cursor);
+      printf("%4d\t%5d\t%8ld\t%12lu\t%12lu\n", i++, block->alloc, block->size,
+        (long unsigned) block->ptr,
+		(long unsigned) block->ptr + block->size - 1
 	  );
 	}
 
@@ -435,3 +475,58 @@ void print_memory_status() {
 }
 
 
+/*******************/
+size_t getSize(pageTableEntry* x){
+	if (x==NULL) return -1;
+	return x->size;
+}
+
+char setSize(pageTableEntry* x, size_t sz){
+	if (x==NULL || sz<=0) return -1;
+	x->size = sz;
+	return 1;
+}
+
+char isAlloc(pageTableEntry* x){
+	if (x==NULL) return -1;
+	return x->alloc;
+}
+
+char setAlloc(pageTableEntry* x, char a){
+	if (x==NULL) return -1;
+	x->alloc = a;
+	return 1;
+}
+
+void  *getPtr(pageTableEntry* x){
+	if (x==NULL) return NULL;
+	return x->ptr;
+}
+
+char setPtr(pageTableEntry* x, void *p){
+	if (x==NULL || p==NULL) return -1;
+	x->ptr = p;
+	return 1;
+}
+
+char containsAddress(void *e, void *ptr){
+	if (e==NULL || ptr==NULL) return -1;
+	pageTableEntry *en = (pageTableEntry *) e;
+	return ( (ptr >= en->ptr) && 
+			 (ptr < en->ptr + en->size)
+			 );
+}
+
+
+pageTableEntry *newEntry(void *p, size_t s, char a){
+	pageTableEntry *x = malloc(sizeof(pageTableEntry));
+	x->size = s;
+	x->alloc = a;
+	x->ptr = p;
+	return x;
+}
+
+void removeEntry(void *p){
+	if (p != NULL) 
+		free(p);
+}
