@@ -86,17 +86,12 @@ void myfree(void* ptr){
 	void *referenceNode = getNode(ptr,containsAddress);
 	
 	pageTableEntry *block = (pageTableEntry *) getData(referenceNode);
-	/**DEBUGGING STOPPED HERE. ITS 2 AM AND NO ONE IS EVER GOING TO READ THIS. */
-	printf("1 block found.\n");
+
 	Node *tn = (Node *) referenceNode;
-	printf("tn->data->size = %p\n",((pageTableEntry *)tn->data)->ptr);
 	Node *t = getPredecessor(referenceNode);
-	printf("t found.\n");
 	
     pageTableEntry *prevBlock = (pageTableEntry *) getData(getPredecessor(referenceNode)); 
-    printf("2 blocks found.\n");
     pageTableEntry *nextBlock = (pageTableEntry *) getData(getSuccessor(referenceNode));
-    printf("3 blocks found.\n");
     
     
     size_t blockSize = getSize(block),
@@ -151,7 +146,7 @@ void myfree(void* ptr){
               -> remove next entry
             */ 
             setSize(block, blockSize + nextSize);
-			setAlloc(block, 0);
+			setAlloc(block, FREE);
 			removeNode(getSuccessor(referenceNode));
 			return;
 
@@ -161,14 +156,14 @@ void myfree(void* ptr){
             /* don't need to do anything with other nodes
                just set alloc to 0
              */ 
-            setAlloc(block, 0);
+            setAlloc(block, FREE);
 			return;
 			
 		}
         
     /* case 2.5: block takes up all of memory */
 	} else if (ptr == baseAddress && (blockSize == memorySize)){ 
-		setAlloc(block, 0);
+		setAlloc(block, FREE);
 		return;
 
     /* case 2.1 or 2.2: block is at beginning of pool */
@@ -176,13 +171,13 @@ void myfree(void* ptr){
 		
         /* case 2.2: next block is allocated */
 		if (isAlloc(nextBlock)) {
-			setAlloc(block, 0);
+			setAlloc(block, FREE);
 			return;
         
         /* case 2.1: next block is free */
 		} else {
 			setSize(block, blockSize + nextSize);
-			setAlloc(block, 0);
+			setAlloc(block, FREE);
 			removeNode(getSuccessor(referenceNode));			
 			return;
 		}
@@ -193,7 +188,7 @@ void myfree(void* ptr){
 
         /* case 2.4: previous block is allocated */
 		if (isAlloc(prevBlock)) {
-			setAlloc(block, 0);
+			setAlloc(block, FREE);
 			return;
         
         /* case 2.3: previous block is free */
@@ -219,7 +214,7 @@ static pageTableEntry *allocate(void *node, size_t sz){
 	pageTableEntry *block = getData(node);
 	/* if the requested size is the size of block, give entire block */
 	if (getSize(block) == sz) {
-		setAlloc(block, 1);
+		setAlloc(block, ALLOCATED);
 		return block;
 	}
 	
@@ -227,7 +222,7 @@ static pageTableEntry *allocate(void *node, size_t sz){
 	 and add it to the list */
 	int leftoverSize = getSize(block) - sz;
 	setSize(block, sz);
-	setAlloc(block, 1);
+	setAlloc(block, ALLOCATED);
 
 	/* now we need to make a new entry to point to the remaining
 	   memory in that block */	
@@ -257,15 +252,17 @@ static void *bestCase(size_t requestedSize){
 	size_t blockSize;
 	pageTableEntry *block;
 	
-	for (cursor = getFirst(); cursor!=NULL; cursor = getSuccessor(cursor)) {
+	for (cursor = getFirst(); cursor != NULL; cursor = getSuccessor(cursor)) {
 		block = getData(cursor);
 		blockSize = block->size;
-		
-		if (!block->size && (blockSize - requestedSize < closestSize) && (blockSize >= requestedSize) ) {
+
+		if ((blockSize - requestedSize < closestSize)
+				&& (blockSize >= requestedSize)) {
 			closestSize = blockSize - requestedSize;
 			bestNode = cursor;
-			if (closestSize == 0) break; /* As close to the size as it can get */
-	    }
+			if (closestSize == 0)
+				break; /* As close to the size as it can get */
+		}
 	}
     if (bestNode==NULL) {
 		perror("Could not allocate that much data!");
@@ -451,7 +448,7 @@ void print_memory() {
 	for (i=0; i < totalSize; i+=partitionSize) {
 		printf("From %lu to %lu\t", i, (i+partitionSize-1));
 		for (j=0; j < partitionSize; j++) {
-			printf("%d", mem_is_alloc(baseAddress+i+j));
+			printf("%c", mem_is_alloc(baseAddress+i+j) == FREE ? '0' : '1');
 		}
 		printf("\n");
 	}

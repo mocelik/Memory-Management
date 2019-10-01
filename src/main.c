@@ -18,18 +18,18 @@ int main(int argc, char **argv) {
     int algorithm = FIRSTFIT;
     void *a, *b, *c, *d, *e;
     
-	if(argc > 1) {
-		if (!strcmp(argv[1],"first"))
-			algorithm =  FIRSTFIT;
-			
-		else if (!strcmp(argv[1],"best"))
+	if (argc > 1) {
+		if (!strcmp(argv[1], "first"))
+			algorithm = FIRSTFIT;
+
+		else if (!strcmp(argv[1], "best"))
 			algorithm = BESTFIT;
-			
-		else if (!strcmp(argv[1],"worst"))
-			algorithm =  WORSTFIT;	
-				
-		else if (!strcmp(argv[1],"next"))
-			algorithm =  NEXTFIT;  
+
+		else if (!strcmp(argv[1], "worst"))
+			algorithm = WORSTFIT;
+
+		else if (!strcmp(argv[1], "next"))
+			algorithm = NEXTFIT;
 	} else {
 		algorithm = FIRSTFIT;
 	}
@@ -40,10 +40,8 @@ int main(int argc, char **argv) {
 	b = mymalloc(102);
 	c = mymalloc(103);
 	myfree(b);
-	printf("Passed first free.\n");
 	d = mymalloc(50);
 	myfree(a);
-	printf("Passed 2nd free.\n");
 	e = mymalloc(25);
 
 	print_memory();

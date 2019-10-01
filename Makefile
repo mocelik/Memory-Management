@@ -33,7 +33,7 @@ ALL_CFLAGS		+= -Wuninitialized -Winit-self -Wfloat-equal
 ALL_CFLAGS		+= -Wconversion -Wsign-conversion -Wjump-misses-init
 ALL_CFLAGS		+= -Wno-multichar -Wpacked -Wstrict-overflow -Wvla
 ALL_CFLAGS		+= -Wformat -Wno-format-zero-length -Wstrict-prototypes
-ALL_CFLAGS		+= -Wno-unknown-warning-option
+#ALL_CFLAGS		+= -Wno-unknown-warning-option
 
 # Preprocessor Flags
 ALL_CPPFLAGS	:= $(CPPFLAGS)

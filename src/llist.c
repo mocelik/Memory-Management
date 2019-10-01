@@ -9,7 +9,7 @@ static Node *head;
 /*
  * This initializes the list to start at address at size sz
  */
-Node *initializeList(void *p){
+void initializeList(void *p){
 
 	head = malloc(sizeof(Node));
 	head->data = p;
@@ -23,11 +23,9 @@ void *getFirst(){
 }
 
 void *getPredecessor(void* x){
-	printf("hey!");
 	if (x==NULL) return NULL;
 	Node *xx = (Node *) x;
 	
-	printf("Found predecessor. xx->prev->data->size = %ld\n", ((pageTableEntry *)xx->prev->data)->size);
 	return xx->prev; 
 }
 
@@ -78,11 +76,10 @@ void *getNode(void *ptr, char (*f)(void*, void *)){
 	Node *cursor;
 	for (cursor = head; cursor != NULL; cursor= cursor->next){
 		if ( f(cursor->data, ptr) ) {
-			printf("Found the node. cursor->data->size = %ld\n",((pageTableEntry *)cursor->data)->size);
-			return cursor->data;
+			return cursor;
 		}
 	}
-	perror("There is no corresponding entry...\n");
+	perror("There is no corresponding entry... Returning null.\n");
 	return NULL;	
 }
 
@@ -95,21 +92,25 @@ char removeNode(Node *entry){
 	if (entry->next != NULL && entry->prev != NULL) { 
 		(entry->next)->prev = entry->prev; 
 		(entry->prev)->next = entry->next;
+		free(entry->data);
         free(entry);
 	
     /* if node is last in list */
 	} else if (entry->next==NULL && entry->prev!=NULL){
 		(entry->prev)->next = NULL;	
+		free(entry->data);
         free(entry);
 
     /* if node is first in list */
 	} else if (entry->next!=NULL && entry->prev==NULL) {
 		head = entry->next;
+		free(entry->data);
 		free(entry);
 
     /* if node is the only node in list... */
 	} else if (entry->next==NULL && entry->prev==NULL) {
-		free(entry); /* equivalent to free(head); (I hope) */
+		free(entry->data);
+		free(entry); /* equivalent to free(head); */
         
 	} else {
         perror("Cannot remove node from list.");
@@ -122,13 +123,14 @@ char removeNode(Node *entry){
 /*
  * This clears the list, freeing all the nodes
  */
-void removeAllNodes(){
+void removeAllNodes() {
 	if (head != NULL) {
-	   Node* temp;
-	   while (head != NULL){
-		   temp = head;
-		   head = head->next;
-		   free(temp);
-	   }
+		Node *temp;
+		while (head != NULL) {
+			temp = head;
+			head = head->next;
+			free(temp->data);
+			free(temp);
+		}
 	}
 }

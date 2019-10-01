@@ -8,7 +8,7 @@
 
 void *getNode(void *, char (*)(void *, void *));
 
-Node *initializeList(void *);
+void initializeList(void *);
 void *getFirst(void);
 void *getPredecessor(void*);
 void *getSuccessor(void*);
