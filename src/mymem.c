@@ -86,10 +86,6 @@ void myfree(void* ptr){
 	void *referenceNode = getNode(ptr,containsAddress);
 	
 	pageTableEntry *block = (pageTableEntry *) getData(referenceNode);
-
-	Node *tn = (Node *) referenceNode;
-	Node *t = getPredecessor(referenceNode);
-	
     pageTableEntry *prevBlock = (pageTableEntry *) getData(getPredecessor(referenceNode)); 
     pageTableEntry *nextBlock = (pageTableEntry *) getData(getSuccessor(referenceNode));
     
@@ -220,14 +216,14 @@ static pageTableEntry *allocate(void *node, size_t sz){
 	
 	/* If they didn't request all of the block, split the remaining
 	 and add it to the list */
-	int leftoverSize = getSize(block) - sz;
+	size_t leftoverSize = getSize(block) - sz;
 	setSize(block, sz);
 	setAlloc(block, ALLOCATED);
 
 	/* now we need to make a new entry to point to the remaining
 	   memory in that block */	
 	next = addSuccessor(node, 
-			newEntry(getPtr(block) + getSize(block), leftoverSize, 0));
+			newEntry(getPtr(block) + getSize(block), leftoverSize, FREE));
 							
 	return block;
 }
@@ -246,7 +242,7 @@ static void *firstCase(size_t requestedSize) {
 }
 
 static void *bestCase(size_t requestedSize){
-	int closestSize = memorySize; /* realistically this is the biggest it can be... */
+	size_t closestSize = memorySize; /* realistically this is the biggest it can be... */
 	void *bestNode = NULL;
 	void *cursor;
 	size_t blockSize;
@@ -256,7 +252,7 @@ static void *bestCase(size_t requestedSize){
 		block = getData(cursor);
 		blockSize = block->size;
 
-		if ((blockSize - requestedSize < closestSize)
+		if (!isAlloc(block) && (blockSize - requestedSize < closestSize)
 				&& (blockSize >= requestedSize)) {
 			closestSize = blockSize - requestedSize;
 			bestNode = cursor;
@@ -272,7 +268,7 @@ static void *bestCase(size_t requestedSize){
 }
 
 static void *worstCase(size_t requestedSize){
-	int furthestSize = 0;
+	size_t furthestSize = 0;
 	Node *bestNode = NULL;
 	Node *cursor;
 	size_t blockSize;
@@ -328,9 +324,9 @@ static void *nextCase(size_t requestedSize){
  */
 
 /* Get the number of contiguous areas of free space in memory. */
-int mem_holes()
+unsigned int mem_holes()
 {
-	int holes = 0;
+	unsigned int holes = 0;
 	Node *cursor;
 	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor))
 		if (!isAlloc(getData(cursor)))
@@ -339,9 +335,9 @@ int mem_holes()
 }
 
 /* Get the number of bytes allocated */
-int mem_allocated()
+size_t mem_allocated()
 {
-	int allocated = 0;
+	size_t allocated = 0;
 	Node *cursor;
 	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor))
 		if (isAlloc(getData(cursor))) 
@@ -350,9 +346,9 @@ int mem_allocated()
 }
 
 /* Number of non-allocated bytes */
-int mem_free()
+size_t mem_free()
 {
-	int count=0;
+	size_t count=0;
 	Node *cursor;
 	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor)){
 		if (!isAlloc(getData(cursor))) {
@@ -363,9 +359,9 @@ int mem_free()
 }
 
 /* Number of bytes in the largest contiguous area of unallocated memory */
-int mem_largest_free()
+size_t mem_largest_free()
 {
-	int largest = 0;
+	size_t largest = 0;
 	Node *cursor;
 	for (cursor = getFirst(); cursor!=NULL; cursor=getSuccessor(cursor))
 		if ( getSize(getData(cursor)) > largest && !isAlloc(getData(cursor))) 
@@ -374,7 +370,7 @@ int mem_largest_free()
 }
 
 /* Number of free blocks smaller than "size" bytes. */
-int mem_small_free(int size)
+int mem_small_free(size_t size)
 {
 	/* traverses the memoryList and records the ones with sizes less
 	   than size */
@@ -405,7 +401,7 @@ void *mem_pool() {
 }
 
 /* Returns the total number of bytes in the memory pool. */
-int mem_total() {
+size_t mem_total() {
 	return memorySize;
 }
 
@@ -416,7 +412,7 @@ int mem_total() {
  */
 
 /* Use this function to print out the current contents of memory. */
-void printList() {
+void printList(void) {
 	printf("\nThe memory list contains the following data:\n");
     printf("%4s\t%5s\t%8s\t%12s\t%12s\n","Node","Alloc","Size","From","To");
 	int i=0;
@@ -466,15 +462,15 @@ void print_memory() {
  * but on the functions you wrote above.
  */ 
 void print_memory_status() {
-	printf("%d out of %d bytes allocated.\n",mem_allocated(),mem_total());
-	printf("%d bytes are free in %d holes; maximum allocatable block is %d bytes.\n",mem_free(),mem_holes(),mem_largest_free());
-	printf("Average hole size is %f.\n\n",((float)mem_free())/mem_holes());
+	printf("%lu out of %lu bytes allocated.\n",mem_allocated(),mem_total());
+	printf("%lu bytes are free in %d holes; maximum allocatable block is %lu bytes.\n",mem_free(),mem_holes(),mem_largest_free());
+	printf("Average hole size is %f.\n\n", ( (float)mem_free()) / mem_holes());
 }
 
 
 /*******************/
 size_t getSize(pageTableEntry* x){
-	if (x==NULL) return -1;
+	if (x==NULL) return 0;
 	return x->size;
 }
 

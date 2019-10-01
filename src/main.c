@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
 	print_memory_status();
 
 	terminateAlgorithms();
-	
+	printf("a=%p, b=%p, c=%p, d=%p, e=%p\n", a, b, c, d, e);
     printf("DONE!\n");
     return 0;
 }

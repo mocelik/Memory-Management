@@ -17,7 +17,7 @@ BINDIR		= bin
 
 # CFLAGS, LDFLAGS, CPPFLAGS, PREFIX can be overriden on CLI
 CFLAGS		:= $(DEBUG)
-#CFLAGS		+= --std=c90
+CFLAGS		+= -std=c99
 CPPFLAGS	:=
 LDFLAGS		:=
 PREFIX		:= /usr/local
@@ -26,7 +26,7 @@ TARGET_ARCH :=
 
 # Compiler Flags
 ALL_CFLAGS		:= $(CFLAGS)
-ALL_CFLAGS		+= -Wall -Wextra -pedantic -ansi
+ALL_CFLAGS		+= -Wall -Wextra -pedantic #-ansi
 ALL_CFLAGS		+= -fno-strict-aliasing
 ALL_CFLAGS		+= -Wuninitialized -Winit-self -Wfloat-equal
 #ALL_CFLAGS		+= -Wundef -Wshadow -Wc++-compat -Wcast-qual -Wcast-align
@@ -34,6 +34,7 @@ ALL_CFLAGS		+= -Wconversion -Wsign-conversion -Wjump-misses-init
 ALL_CFLAGS		+= -Wno-multichar -Wpacked -Wstrict-overflow -Wvla
 ALL_CFLAGS		+= -Wformat -Wno-format-zero-length -Wstrict-prototypes
 #ALL_CFLAGS		+= -Wno-unknown-warning-option
+ALL_CFLAGS		+= -Wno-pointer-arith -Wno-conversion
 
 # Preprocessor Flags
 ALL_CPPFLAGS	:= $(CPPFLAGS)

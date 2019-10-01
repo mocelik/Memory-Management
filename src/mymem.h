@@ -14,12 +14,12 @@ void *mymalloc(size_t requested);
 void  myfree(void* block);
 
 /** External Statistic or Diagnostic Functions */
-int   mem_holes(void);
-int   mem_allocated(void);
-int   mem_free(void);
-int   mem_total(void);
-int   mem_largest_free(void);
-int   mem_small_free(int size);
+unsigned int   mem_holes(void);
+size_t   mem_allocated(void);
+size_t   mem_free(void);
+size_t   mem_total(void);
+size_t   mem_largest_free(void);
+int   mem_small_free(size_t size);
 char  mem_is_alloc(void *ptr);
 void* mem_pool(void);
 void  print_memory(void);

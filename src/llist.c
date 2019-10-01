@@ -59,6 +59,7 @@ Node *addSuccessor(Node* x, void *p){
 	new->next = x->next;
 	new->prev = x;
 	x->next = new;
+	return new;
 }
 
 void *getData(void *p){
